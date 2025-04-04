@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+# SemaforoSong - Aplicación para Raspberry Pi con soporte para pantalla pequeña y simulación Arduino
+
 import sys
 import os
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QLabel, QFrame
-from PyQt5.QtGui import QPixmap, QImage
+from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QLabel, QFrame, QShortcut
+from PyQt5.QtGui import QPixmap, QImage, QKeySequence
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 import requests
 import serial
@@ -49,6 +51,14 @@ class ArduinoThread(QThread):
         if hasattr(self, 'arduino') and self.arduino.is_open:
             self.arduino.close()
 
+# Clase Arduino simulado para cuando no hay hardware
+class FakeArduinoThread:
+    def __init__(self):
+        pass
+    def send_command(self, cmd):
+        print(f"Comando enviado (simulado): {cmd}")
+        return True
+
 class SemaforoApp(QWidget):
     def __init__(self):
         super().__init__()
@@ -65,7 +75,7 @@ class SemaforoApp(QWidget):
         self.setGeometry(0, 0, 480, 320)
         self.showFullScreen()
         
-        # Estilo general - Fuentes más pequeñas para pantalla menor
+        # Estilo general - Optimizado para pantallas pequeñas
         self.setStyleSheet("""
             QWidget {
                 background-color: #1E1E1E;
@@ -76,8 +86,9 @@ class SemaforoApp(QWidget):
                 background-color: #3D3D3D;
                 border: none;
                 border-radius: 5px;
-                padding: 5px;
-                font-size: 14px;
+                padding: 10px;
+                font-size: 16px;
+                min-height: 50px;
             }
             QPushButton:hover {
                 background-color: #505050;
@@ -91,136 +102,157 @@ class SemaforoApp(QWidget):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
         
-        # Título - Más pequeño
+        # Título
         title = QLabel('SemaforoSong')
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet('font-size: 22px; font-weight: bold; color: #00A5E0;')
         layout.addWidget(title)
         
-        # Estado del semáforo - Más pequeño
+        # Estado del semáforo
         self.status_label = QLabel('Esperando...')
         self.status_label.setAlignment(Qt.AlignCenter)
         self.status_label.setStyleSheet('font-size: 16px; color: white;')
         layout.addWidget(self.status_label)
         
-        # Marco para la imagen QR - Más pequeño para pantalla menor
+        # Marco para la imagen QR - Optimizado para pantalla pequeña
         qr_frame = QFrame()
         qr_frame.setStyleSheet("background-color: white; border-radius: 10px;")
         qr_layout = QVBoxLayout(qr_frame)
         qr_layout.setContentsMargins(5, 5, 5, 5)
         
-        # Imagen QR - Más pequeña
+        # Imagen QR
         self.qr_label = QLabel()
         self.qr_label.setAlignment(Qt.AlignCenter)
-        self.qr_label.setMinimumSize(200, 200)  # Tamaño menor
-        self.qr_label.setMaximumSize(200, 200)  # Limitar tamaño máximo
+        self.qr_label.setMinimumSize(180, 180)  # Tamaño para pantalla pequeña
+        self.qr_label.setMaximumSize(180, 180)
         self.qr_label.setStyleSheet("background-color: white;")
         qr_layout.addWidget(self.qr_label)
         
         layout.addWidget(qr_frame)
         
-        # Estado de conexión - Más pequeño
-        self.connection_label = QLabel('Buscando Arduino...')
+        # Estado de conexión
+        self.connection_label = QLabel('Presiona C para conectar')
         self.connection_label.setAlignment(Qt.AlignCenter)
-        self.connection_label.setStyleSheet('color: #FFD700; font-size: 12px;')
+        self.connection_label.setStyleSheet('color: #FFD700; font-size: 14px;')
         layout.addWidget(self.connection_label)
         
-        # Botón de reinicio - Más pequeño
-        self.reset_button = QPushButton('Reiniciar Sistema')
-        self.reset_button.clicked.connect(self.reset_system)
-        self.reset_button.setStyleSheet("""
+        # Botones grandes y con atajos de teclado
+        button_layout = QVBoxLayout()
+        
+        # Botón para simular pulsación
+        self.test_button = QPushButton('SIMULAR PULSADOR (P)')
+        self.test_button.clicked.connect(self.simulate_button_press)
+        self.test_button.setStyleSheet("""
+            QPushButton {
+                background-color: #1E90FF;
+                color: white;
+                font-size: 16px;
+                padding: 10px;
+                min-height: 50px;
+            }
+            QPushButton:hover {
+                background-color: #4169E1;
+            }
+        """)
+        button_layout.addWidget(self.test_button)
+        
+        # Botón para conectar
+        self.connect_button = QPushButton('CONECTAR ARDUINO (C)')
+        self.connect_button.clicked.connect(self.manual_connect_arduino)
+        self.connect_button.setStyleSheet("""
+            QPushButton {
+                background-color: #006400;
+                color: white;
+                font-size: 16px;
+                padding: 10px;
+                min-height: 50px;
+            }
+            QPushButton:hover {
+                background-color: #008000;
+            }
+        """)
+        button_layout.addWidget(self.connect_button)
+        
+        # Botón para salir
+        self.exit_button = QPushButton('SALIR (ESC)')
+        self.exit_button.clicked.connect(self.close)
+        self.exit_button.setStyleSheet("""
             QPushButton {
                 background-color: #8B0000;
                 color: white;
-                font-size: 14px;
-                padding: 5px;
+                font-size: 16px;
+                padding: 10px;
+                min-height: 50px;
             }
             QPushButton:hover {
                 background-color: #B22222;
             }
         """)
-        layout.addWidget(self.reset_button)
+        button_layout.addWidget(self.exit_button)
         
-        # Botón para conectar manualmente (para depuración)
-        self.connect_button = QPushButton('Conectar Arduino')
-        self.connect_button.clicked.connect(self.manual_connect_arduino)
-        layout.addWidget(self.connect_button)
+        layout.addLayout(button_layout)
         
         self.setLayout(layout)
         
+        # Atajos de teclado
+        QShortcut(QKeySequence('P'), self).activated.connect(self.simulate_button_press)
+        QShortcut(QKeySequence('C'), self).activated.connect(self.manual_connect_arduino)
+        QShortcut(QKeySequence('Escape'), self).activated.connect(self.close)
+        
+    def simulate_button_press(self):
+        """Simula una pulsación del botón físico"""
+        self.process_arduino_message("BUTTON_PRESSED")
+        
     def manual_connect_arduino(self):
+        """Intenta conectar con el Arduino o simula una conexión"""
+        # Buscar puertos disponibles
         ports = [port.device for port in serial.tools.list_ports.comports()]
-        if not ports:
-            self.connection_label.setText("No hay puertos disponibles")
-            return
-            
-        port = ports[0]  # Usar el primer puerto disponible
-        try:
-            self.arduino_thread = ArduinoThread(port)
-            self.arduino_thread.signal.connect(self.process_arduino_message)
-            self.arduino_thread.start()
-            self.connection_label.setText(f"Conectado a {port}")
-            self.connection_label.setStyleSheet('color: green; font-size: 12px;')
-        except Exception as e:
-            self.connection_label.setText(f"Error: {str(e)}")
-            self.connection_label.setStyleSheet('color: red; font-size: 12px;')
+        
+        if ports:
+            # Intenta conectar con el primer puerto disponible
+            port = ports[0]
+            try:
+                self.arduino_thread = ArduinoThread(port)
+                self.arduino_thread.signal.connect(self.process_arduino_message)
+                self.arduino_thread.start()
+                self.connection_label.setText(f"Conectado a {port}")
+                self.connection_label.setStyleSheet('color: green; font-size: 14px;')
+            except Exception as e:
+                # Si falla, usa simulación
+                self.arduino_thread = FakeArduinoThread()
+                self.connection_label.setText(f"Usando Arduino simulado (no real)")
+                self.connection_label.setStyleSheet('color: orange; font-size: 14px;')
+        else:
+            # No hay puertos disponibles, usar simulación
+            self.arduino_thread = FakeArduinoThread()
+            self.connection_label.setText("Usando Arduino simulado (no real)")
+            self.connection_label.setStyleSheet('color: orange; font-size: 14px;')
         
     def autoconnect_arduino(self):
-        if self.connect_attempts > 5:
-            self.connection_label.setText("No se pudo conectar. Use botón manual.")
-            self.connection_label.setStyleSheet('color: red; font-size: 12px;')
-            return
-            
-        self.connect_attempts += 1
-        self.connection_label.setText(f"Buscando... (intento {self.connect_attempts})")
-        
-        # Imprimir puertos disponibles para depuración
+        """Intenta conectar automáticamente con el Arduino al inicio"""
         ports = [port.device for port in serial.tools.list_ports.comports()]
-        print(f"Puertos disponibles: {ports}")
         
         if not ports:
-            # No hay puertos disponibles, intentar de nuevo después
-            QTimer.singleShot(2000, self.autoconnect_arduino)
+            self.connection_label.setText("No se encontró Arduino. Presiona C.")
+            self.connection_label.setStyleSheet('color: #FFD700; font-size: 14px;')
             return
             
         for port in ports:
             try:
-                print(f"Intentando puerto: {port}")
-                # Intentar conectar a cada puerto
                 arduino = serial.Serial(port, 9600, timeout=1)
-                time.sleep(2)  # Esperar a que Arduino se reinicie
+                arduino.close()  # Solo verificamos si está disponible
                 
-                # Limpiar el buffer de entrada
-                arduino.reset_input_buffer()
-                
-                # Esperar el mensaje de inicio
-                for _ in range(3):  # Intentar 3 veces
-                    arduino.write(b"\n")  # Enviar un newline para despertar el Arduino
-                    time.sleep(0.5)
-                    if arduino.in_waiting > 0:
-                        message = arduino.readline().decode('utf-8').strip()
-                        print(f"Mensaje recibido: {message}")
-                        if "SEMAFOROSONG_READY" in message:
-                            arduino.close()  # Cerrar para que el thread pueda abrirlo
-                            
-                            # Iniciar hilo para comunicación con Arduino
-                            self.arduino_thread = ArduinoThread(port)
-                            self.arduino_thread.signal.connect(self.process_arduino_message)
-                            self.arduino_thread.start()
-                            
-                            self.connection_label.setText(f"Conectado a {port}")
-                            self.connection_label.setStyleSheet('color: green; font-size: 12px;')
-                            return
-                            
-                arduino.close()
-            except Exception as e:
-                print(f"Error con puerto {port}: {str(e)}")
+                # Usar conexión manual con el primer puerto disponible
+                self.manual_connect_arduino()
+                return
+            except:
                 continue
                 
-        # No se encontró, intentar de nuevo después
-        QTimer.singleShot(2000, self.autoconnect_arduino)
+        self.connection_label.setText("No se pudo conectar. Presiona C.")
+        self.connection_label.setStyleSheet('color: #FFD700; font-size: 14px;')
         
     def process_arduino_message(self, message):
+        """Procesa mensajes recibidos del Arduino"""
         print(f"Arduino: {message}")
         
         if message == "BUTTON_PRESSED":
@@ -230,9 +262,10 @@ class SemaforoApp(QWidget):
             self.request_qr_code()
         elif "ERROR" in message:
             self.connection_label.setText(f"Error: {message}")
-            self.connection_label.setStyleSheet('color: red; font-size: 12px;')
+            self.connection_label.setStyleSheet('color: red; font-size: 14px;')
             
     def request_qr_code(self):
+        """Solicita un nuevo código QR al servidor"""
         try:
             response = requests.get(
                 "https://moradn22.pythonanywhere.com/api/generate-qr-code",
@@ -266,6 +299,7 @@ class SemaforoApp(QWidget):
             self.status_label.setStyleSheet('font-size: 16px; color: red;')
             
     def display_qr(self, qr_image_base64, is_green, result_command):
+        """Muestra el código QR en la interfaz"""
         try:
             qr_data = base64.b64decode(qr_image_base64)
             qr_img = Image.open(BytesIO(qr_data))
@@ -275,7 +309,7 @@ class SemaforoApp(QWidget):
             qimage = QImage(qr_img.tobytes(), qr_img.width, qr_img.height, QImage.Format_RGBA8888)
             pixmap = QPixmap.fromImage(qimage)
             
-            # Mostrar imagen - Limitada a 180x180 para pantalla pequeña
+            # Mostrar imagen - Optimizada para pantalla pequeña
             self.qr_label.setPixmap(pixmap.scaled(180, 180, Qt.KeepAspectRatio))
             
             # Actualizar estado según el comando
@@ -298,16 +332,9 @@ class SemaforoApp(QWidget):
             self.status_label.setText(f"Error: {str(e)}")
             self.status_label.setStyleSheet('font-size: 16px; color: red;')
             
-    def reset_system(self):
-        if self.arduino_thread:
-            self.arduino_thread.send_command("RESET")
-            
-        self.status_label.setText("Sistema reiniciado")
-        self.status_label.setStyleSheet('font-size: 16px; color: white;')
-        self.qr_label.clear()
-                
     def closeEvent(self, event):
-        if self.arduino_thread:
+        """Maneja el evento de cierre de la aplicación"""
+        if hasattr(self.arduino_thread, 'stop'):
             self.arduino_thread.stop()
         event.accept()
 
