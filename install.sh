@@ -8,7 +8,7 @@ mkdir -p $HOME/.config/autostart
 
 # Descargar archivos
 echo "Descargando archivos de la aplicación..."
-curl -sSL https://raw.githubusercontent.com/TU_USUARIO/semaforosong/main/semaforosong_app.py -o $HOME/semaforosong/semaforosong_app.py
+curl -sSL https://raw.githubusercontent.com/moradn22/semaforosong/main/semaforosong_app.py -o $HOME/semaforosong/semaforosong_app.py
 
 # Instalar dependencias
 echo "Instalando dependencias necesarias..."
