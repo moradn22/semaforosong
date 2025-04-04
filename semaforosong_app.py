@@ -101,10 +101,10 @@ class SemaforoApp(QWidget):
             }
         """)
         
-        # Layout principal es una rejilla para mejor control
-        main_layout = QGridLayout()
-        main_layout.setSpacing(5)
-        main_layout.setContentsMargins(5, 5, 5, 5)
+        # Layout principal - Usamos un layout vertical para maximizar espacio para QR
+        main_layout = QVBoxLayout()
+        main_layout.setSpacing(4)
+        main_layout.setContentsMargins(4, 4, 4, 4)
         
         # Cabecera estilo cartel de tráfico
         header_frame = QFrame()
@@ -124,9 +124,13 @@ class SemaforoApp(QWidget):
         self.status_label.setStyleSheet('color: #FFCC00; font-size: 16px; font-weight: bold; background-color: transparent;')
         header_layout.addWidget(self.status_label)
         
-        main_layout.addWidget(header_frame, 0, 0, 1, 2)
+        main_layout.addWidget(header_frame)
         
-        # Marco para el QR con borde de señal
+        # Área central para QR y botones
+        central_layout = QGridLayout()
+        central_layout.setSpacing(4)
+        
+        # Marco para el QR con borde de señal - MUCHO MÁS GRANDE
         qr_frame = QFrame()
         qr_frame.setStyleSheet("""
             background-color: white; 
@@ -134,26 +138,20 @@ class SemaforoApp(QWidget):
             border-radius: 10px;
         """)
         qr_layout = QVBoxLayout(qr_frame)
-        qr_layout.setContentsMargins(5, 5, 5, 5)
+        qr_layout.setContentsMargins(4, 4, 4, 4)
         qr_layout.setSpacing(0)
+        qr_layout.setAlignment(Qt.AlignCenter)  # Centrar el contenido
         
-        # Imagen QR
+        # Imagen QR - MUCHO MÁS GRANDE
         self.qr_label = QLabel()
         self.qr_label.setAlignment(Qt.AlignCenter)
-        self.qr_label.setFixedSize(190, 190)  # Tamaño fijo para asegurar visibilidad
+        self.qr_label.setFixedSize(240, 240)  # QR más grande
         self.qr_label.setStyleSheet("border: none;")
         qr_layout.addWidget(self.qr_label)
         
-        main_layout.addWidget(qr_frame, 1, 0, 2, 1)
+        central_layout.addWidget(qr_frame, 0, 0, 3, 2)  # QR ocupa más celdas
         
-        # Panel de botones tipo cartel
-        button_frame = QFrame()
-        button_frame.setStyleSheet("background-color: #0066CC; border-radius: 5px;")
-        button_layout = QVBoxLayout(button_frame)
-        button_layout.setContentsMargins(5, 5, 5, 5)
-        button_layout.setSpacing(5)
-        
-        # Botón para simular pulsación
+        # Botones en vertical a la derecha
         self.test_button = QPushButton('PULSE PARA\nSOLICITAR (P)')
         self.test_button.clicked.connect(self.simulate_button_press)
         self.test_button.setStyleSheet("""
@@ -171,9 +169,8 @@ class SemaforoApp(QWidget):
                 background-color: #FF9933;
             }
         """)
-        button_layout.addWidget(self.test_button)
+        central_layout.addWidget(self.test_button, 0, 2, 1, 1)
         
-        # Botón para conectar
         self.connect_button = QPushButton('CONECTAR\nSISTEMA (C)')
         self.connect_button.clicked.connect(self.manual_connect_arduino)
         self.connect_button.setStyleSheet("""
@@ -191,9 +188,8 @@ class SemaforoApp(QWidget):
                 background-color: #00CC00;
             }
         """)
-        button_layout.addWidget(self.connect_button)
+        central_layout.addWidget(self.connect_button, 1, 2, 1, 1)
         
-        # Botón para salir
         self.exit_button = QPushButton('SALIR DEL\nSISTEMA (ESC)')
         self.exit_button.clicked.connect(self.close)
         self.exit_button.setStyleSheet("""
@@ -211,21 +207,28 @@ class SemaforoApp(QWidget):
                 background-color: #FF0000;
             }
         """)
-        button_layout.addWidget(self.exit_button)
+        central_layout.addWidget(self.exit_button, 2, 2, 1, 1)
         
-        main_layout.addWidget(button_frame, 1, 1, 1, 1)
+        # Ajustar proporciones de la rejilla para dar más espacio al QR
+        central_layout.setColumnStretch(0, 40)  # 40% izquierda del QR
+        central_layout.setColumnStretch(1, 40)  # 40% derecha del QR
+        central_layout.setColumnStretch(2, 20)  # 20% para botones
         
-        # Estado de conexión
+        main_layout.addLayout(central_layout)
+        
+        # Barra de estado inferior
         self.connection_label = QLabel('TOQUE PARA CONECTAR')
         self.connection_label.setAlignment(Qt.AlignCenter)
         self.connection_label.setStyleSheet('color: #FFCC00; background-color: #0066CC; border-radius: 5px; padding: 5px;')
-        main_layout.addWidget(self.connection_label, 2, 1, 1, 1)
+        main_layout.addWidget(self.connection_label)
         
-        # Ajustar proporciones de la rejilla
-        main_layout.setColumnStretch(0, 60)  # 60% para el QR
-        main_layout.setColumnStretch(1, 40)  # 40% para los botones
-        
+        # Establecer el layout
         self.setLayout(main_layout)
+        
+        # Proporciones del layout vertical principal
+        main_layout.setStretchFactor(header_frame, 1)  # 10% cabecera
+        main_layout.setStretchFactor(central_layout, 8)  # 80% QR y botones
+        main_layout.setStretchFactor(self.connection_label, 1)  # 10% estado
         
         # Atajos de teclado
         QShortcut(QKeySequence('P'), self).activated.connect(self.simulate_button_press)
@@ -342,8 +345,8 @@ class SemaforoApp(QWidget):
             qimage = QImage(qr_img.tobytes(), qr_img.width, qr_img.height, QImage.Format_RGBA8888)
             pixmap = QPixmap.fromImage(qimage)
             
-            # Mostrar imagen - Con tamaño fijo para pantalla pequeña
-            self.qr_label.setPixmap(pixmap.scaled(180, 180, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            # Mostrar imagen - Con tamaño MÁS GRANDE
+            self.qr_label.setPixmap(pixmap.scaled(230, 230, Qt.KeepAspectRatio, Qt.SmoothTransformation))
             
             # Actualizar estado según el comando - Estilo cartel de tráfico
             if result_command == "SUCCESS_GREEN":
