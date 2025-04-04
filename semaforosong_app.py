@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# SemaforoSong - Aplicación para Raspberry Pi con soporte para pantalla pequeña y simulación Arduino
+# SemaforoSong - Aplicación estilo cartel de tráfico optimizada para pantalla 3.5"
 
 import sys
 import os
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QLabel, QFrame, QShortcut
-from PyQt5.QtGui import QPixmap, QImage, QKeySequence
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QLabel, QFrame, QShortcut, QGridLayout
+from PyQt5.QtGui import QPixmap, QImage, QKeySequence, QFont, QPalette, QColor
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize
 import requests
 import serial
 import serial.tools.list_ports
@@ -71,128 +71,161 @@ class SemaforoApp(QWidget):
         
     def initUI(self):
         self.setWindowTitle('SemaforoSong')
-        # Ajustado para pantalla de 3.5" (480x320)
+        # Ajustado exactamente para 3.5" (480x320)
         self.setGeometry(0, 0, 480, 320)
         self.showFullScreen()
         
-        # Estilo general - Optimizado para pantallas pequeñas
+        # Estilo de cartel de tráfico
         self.setStyleSheet("""
             QWidget {
-                background-color: #1E1E1E;
+                background-color: #003366;
                 color: white;
-                font-family: Arial;
+                font-family: Arial, sans-serif;
             }
             QPushButton {
-                background-color: #3D3D3D;
-                border: none;
-                border-radius: 5px;
-                padding: 10px;
-                font-size: 16px;
-                min-height: 50px;
+                background-color: #FF6600;
+                color: white;
+                border: 2px solid white;
+                border-radius: 10px;
+                padding: 8px;
+                font-size: 14px;
+                font-weight: bold;
+                min-height: 40px;
             }
             QPushButton:hover {
-                background-color: #505050;
+                background-color: #FF9933;
             }
             QLabel {
                 font-size: 14px;
+                font-weight: bold;
             }
         """)
         
-        layout = QVBoxLayout()
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
+        # Layout principal es una rejilla para mejor control
+        main_layout = QGridLayout()
+        main_layout.setSpacing(5)
+        main_layout.setContentsMargins(5, 5, 5, 5)
         
-        # Título
-        title = QLabel('SemaforoSong')
+        # Cabecera estilo cartel de tráfico
+        header_frame = QFrame()
+        header_frame.setStyleSheet("background-color: #0066CC; border-radius: 5px; margin: 0px;")
+        header_layout = QVBoxLayout(header_frame)
+        header_layout.setContentsMargins(2, 2, 2, 2)
+        header_layout.setSpacing(0)
+        
+        title = QLabel('SEMÁFORO SONG')
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet('font-size: 22px; font-weight: bold; color: #00A5E0;')
-        layout.addWidget(title)
+        title.setStyleSheet('color: white; font-size: 18px; font-weight: bold; background-color: transparent;')
+        header_layout.addWidget(title)
         
-        # Estado del semáforo
-        self.status_label = QLabel('Esperando...')
+        # Estado como subtítulo
+        self.status_label = QLabel('ESPERANDO PULSACIÓN')
         self.status_label.setAlignment(Qt.AlignCenter)
-        self.status_label.setStyleSheet('font-size: 16px; color: white;')
-        layout.addWidget(self.status_label)
+        self.status_label.setStyleSheet('color: #FFCC00; font-size: 16px; font-weight: bold; background-color: transparent;')
+        header_layout.addWidget(self.status_label)
         
-        # Marco para la imagen QR - Optimizado para pantalla pequeña
+        main_layout.addWidget(header_frame, 0, 0, 1, 2)
+        
+        # Marco para el QR con borde de señal
         qr_frame = QFrame()
-        qr_frame.setStyleSheet("background-color: white; border-radius: 10px;")
+        qr_frame.setStyleSheet("""
+            background-color: white; 
+            border: 4px solid #FF6600; 
+            border-radius: 10px;
+        """)
         qr_layout = QVBoxLayout(qr_frame)
         qr_layout.setContentsMargins(5, 5, 5, 5)
+        qr_layout.setSpacing(0)
         
         # Imagen QR
         self.qr_label = QLabel()
         self.qr_label.setAlignment(Qt.AlignCenter)
-        self.qr_label.setMinimumSize(180, 180)  # Tamaño para pantalla pequeña
-        self.qr_label.setMaximumSize(180, 180)
-        self.qr_label.setStyleSheet("background-color: white;")
+        self.qr_label.setFixedSize(190, 190)  # Tamaño fijo para asegurar visibilidad
+        self.qr_label.setStyleSheet("border: none;")
         qr_layout.addWidget(self.qr_label)
         
-        layout.addWidget(qr_frame)
+        main_layout.addWidget(qr_frame, 1, 0, 2, 1)
         
-        # Estado de conexión
-        self.connection_label = QLabel('Presiona C para conectar')
-        self.connection_label.setAlignment(Qt.AlignCenter)
-        self.connection_label.setStyleSheet('color: #FFD700; font-size: 14px;')
-        layout.addWidget(self.connection_label)
-        
-        # Botones grandes y con atajos de teclado
-        button_layout = QVBoxLayout()
+        # Panel de botones tipo cartel
+        button_frame = QFrame()
+        button_frame.setStyleSheet("background-color: #0066CC; border-radius: 5px;")
+        button_layout = QVBoxLayout(button_frame)
+        button_layout.setContentsMargins(5, 5, 5, 5)
+        button_layout.setSpacing(5)
         
         # Botón para simular pulsación
-        self.test_button = QPushButton('SIMULAR PULSADOR (P)')
+        self.test_button = QPushButton('PULSE PARA\nSOLICITAR (P)')
         self.test_button.clicked.connect(self.simulate_button_press)
         self.test_button.setStyleSheet("""
             QPushButton {
-                background-color: #1E90FF;
+                background-color: #FF6600;
                 color: white;
-                font-size: 16px;
-                padding: 10px;
+                border: 2px solid white;
+                border-radius: 10px;
+                padding: 5px;
+                font-size: 14px;
+                font-weight: bold;
                 min-height: 50px;
             }
             QPushButton:hover {
-                background-color: #4169E1;
+                background-color: #FF9933;
             }
         """)
         button_layout.addWidget(self.test_button)
         
         # Botón para conectar
-        self.connect_button = QPushButton('CONECTAR ARDUINO (C)')
+        self.connect_button = QPushButton('CONECTAR\nSISTEMA (C)')
         self.connect_button.clicked.connect(self.manual_connect_arduino)
         self.connect_button.setStyleSheet("""
             QPushButton {
-                background-color: #006400;
+                background-color: #009900;
                 color: white;
-                font-size: 16px;
-                padding: 10px;
+                border: 2px solid white;
+                border-radius: 10px;
+                padding: 5px;
+                font-size: 14px;
+                font-weight: bold;
                 min-height: 50px;
             }
             QPushButton:hover {
-                background-color: #008000;
+                background-color: #00CC00;
             }
         """)
         button_layout.addWidget(self.connect_button)
         
         # Botón para salir
-        self.exit_button = QPushButton('SALIR (ESC)')
+        self.exit_button = QPushButton('SALIR DEL\nSISTEMA (ESC)')
         self.exit_button.clicked.connect(self.close)
         self.exit_button.setStyleSheet("""
             QPushButton {
-                background-color: #8B0000;
+                background-color: #CC0000;
                 color: white;
-                font-size: 16px;
-                padding: 10px;
+                border: 2px solid white;
+                border-radius: 10px;
+                padding: 5px;
+                font-size: 14px;
+                font-weight: bold;
                 min-height: 50px;
             }
             QPushButton:hover {
-                background-color: #B22222;
+                background-color: #FF0000;
             }
         """)
         button_layout.addWidget(self.exit_button)
         
-        layout.addLayout(button_layout)
+        main_layout.addWidget(button_frame, 1, 1, 1, 1)
         
-        self.setLayout(layout)
+        # Estado de conexión
+        self.connection_label = QLabel('TOQUE PARA CONECTAR')
+        self.connection_label.setAlignment(Qt.AlignCenter)
+        self.connection_label.setStyleSheet('color: #FFCC00; background-color: #0066CC; border-radius: 5px; padding: 5px;')
+        main_layout.addWidget(self.connection_label, 2, 1, 1, 1)
+        
+        # Ajustar proporciones de la rejilla
+        main_layout.setColumnStretch(0, 60)  # 60% para el QR
+        main_layout.setColumnStretch(1, 40)  # 40% para los botones
+        
+        self.setLayout(main_layout)
         
         # Atajos de teclado
         QShortcut(QKeySequence('P'), self).activated.connect(self.simulate_button_press)
@@ -215,26 +248,26 @@ class SemaforoApp(QWidget):
                 self.arduino_thread = ArduinoThread(port)
                 self.arduino_thread.signal.connect(self.process_arduino_message)
                 self.arduino_thread.start()
-                self.connection_label.setText(f"Conectado a {port}")
-                self.connection_label.setStyleSheet('color: green; font-size: 14px;')
+                self.connection_label.setText(f"CONECTADO: {port}")
+                self.connection_label.setStyleSheet('color: white; background-color: #009900; border-radius: 5px; padding: 5px;')
             except Exception as e:
                 # Si falla, usa simulación
                 self.arduino_thread = FakeArduinoThread()
-                self.connection_label.setText(f"Usando Arduino simulado (no real)")
-                self.connection_label.setStyleSheet('color: orange; font-size: 14px;')
+                self.connection_label.setText("MODO SIMULACIÓN")
+                self.connection_label.setStyleSheet('color: white; background-color: #FF9900; border-radius: 5px; padding: 5px;')
         else:
             # No hay puertos disponibles, usar simulación
             self.arduino_thread = FakeArduinoThread()
-            self.connection_label.setText("Usando Arduino simulado (no real)")
-            self.connection_label.setStyleSheet('color: orange; font-size: 14px;')
+            self.connection_label.setText("MODO SIMULACIÓN")
+            self.connection_label.setStyleSheet('color: white; background-color: #FF9900; border-radius: 5px; padding: 5px;')
         
     def autoconnect_arduino(self):
         """Intenta conectar automáticamente con el Arduino al inicio"""
         ports = [port.device for port in serial.tools.list_ports.comports()]
         
         if not ports:
-            self.connection_label.setText("No se encontró Arduino. Presiona C.")
-            self.connection_label.setStyleSheet('color: #FFD700; font-size: 14px;')
+            self.connection_label.setText("PULSE CONECTAR")
+            self.connection_label.setStyleSheet('color: #FFCC00; background-color: #0066CC; border-radius: 5px; padding: 5px;')
             return
             
         for port in ports:
@@ -248,21 +281,21 @@ class SemaforoApp(QWidget):
             except:
                 continue
                 
-        self.connection_label.setText("No se pudo conectar. Presiona C.")
-        self.connection_label.setStyleSheet('color: #FFD700; font-size: 14px;')
+        self.connection_label.setText("PULSE CONECTAR")
+        self.connection_label.setStyleSheet('color: #FFCC00; background-color: #0066CC; border-radius: 5px; padding: 5px;')
         
     def process_arduino_message(self, message):
         """Procesa mensajes recibidos del Arduino"""
         print(f"Arduino: {message}")
         
         if message == "BUTTON_PRESSED":
-            self.status_label.setText("Procesando...")
-            self.status_label.setStyleSheet('font-size: 16px; color: #FFA500;')
+            self.status_label.setText("PROCESANDO...")
+            self.status_label.setStyleSheet('color: #FFCC00; font-size: 16px; font-weight: bold; background-color: transparent;')
             self.qr_label.clear()
             self.request_qr_code()
         elif "ERROR" in message:
-            self.connection_label.setText(f"Error: {message}")
-            self.connection_label.setStyleSheet('color: red; font-size: 14px;')
+            self.connection_label.setText(f"ERROR DE CONEXIÓN")
+            self.connection_label.setStyleSheet('color: white; background-color: #CC0000; border-radius: 5px; padding: 5px;')
             
     def request_qr_code(self):
         """Solicita un nuevo código QR al servidor"""
@@ -288,15 +321,15 @@ class SemaforoApp(QWidget):
                     if self.arduino_thread:
                         self.arduino_thread.send_command(result_command)
                 else:
-                    self.status_label.setText("Error en la respuesta del servidor")
-                    self.status_label.setStyleSheet('font-size: 16px; color: red;')
+                    self.status_label.setText("ERROR DE SERVIDOR")
+                    self.status_label.setStyleSheet('color: white; font-size: 16px; font-weight: bold; background-color: #CC0000;')
             else:
-                self.status_label.setText(f"Error: {response.status_code}")
-                self.status_label.setStyleSheet('font-size: 16px; color: red;')
+                self.status_label.setText(f"ERROR {response.status_code}")
+                self.status_label.setStyleSheet('color: white; font-size: 16px; font-weight: bold; background-color: #CC0000;')
                 
         except Exception as e:
-            self.status_label.setText(f"Error: {str(e)}")
-            self.status_label.setStyleSheet('font-size: 16px; color: red;')
+            self.status_label.setText("ERROR DE CONEXIÓN")
+            self.status_label.setStyleSheet('color: white; font-size: 16px; font-weight: bold; background-color: #CC0000;')
             
     def display_qr(self, qr_image_base64, is_green, result_command):
         """Muestra el código QR en la interfaz"""
@@ -309,28 +342,29 @@ class SemaforoApp(QWidget):
             qimage = QImage(qr_img.tobytes(), qr_img.width, qr_img.height, QImage.Format_RGBA8888)
             pixmap = QPixmap.fromImage(qimage)
             
-            # Mostrar imagen - Optimizada para pantalla pequeña
-            self.qr_label.setPixmap(pixmap.scaled(180, 180, Qt.KeepAspectRatio))
+            # Mostrar imagen - Con tamaño fijo para pantalla pequeña
+            self.qr_label.setPixmap(pixmap.scaled(180, 180, Qt.KeepAspectRatio, Qt.SmoothTransformation))
             
-            # Actualizar estado según el comando
+            # Actualizar estado según el comando - Estilo cartel de tráfico
             if result_command == "SUCCESS_GREEN":
-                self.status_label.setText("¡VERDE! Solicita canción")
-                self.status_label.setStyleSheet('font-size: 16px; color: #00FF00;')
+                self.status_label.setText("¡VERDE! PUEDE PASAR")
+                self.status_label.setStyleSheet('color: white; font-size: 16px; font-weight: bold; background-color: #009900;')
             elif result_command == "SUCCESS_YELLOW":
-                self.status_label.setText("¡ÁMBAR! Inténtalo de nuevo")
-                self.status_label.setStyleSheet('font-size: 16px; color: #FFA500;')
+                self.status_label.setText("¡ÁMBAR! PRECAUCIÓN")
+                self.status_label.setStyleSheet('color: black; font-size: 16px; font-weight: bold; background-color: #FFCC00;')
             elif result_command == "POLICE_SIREN":
-                self.status_label.setText("¡SIRENA! Inténtalo de nuevo")
-                self.status_label.setStyleSheet('font-size: 16px; color: #00A5E0;')
+                self.status_label.setText("¡CONTROL POLICIAL!")
+                self.status_label.setStyleSheet('color: white; font-size: 16px; font-weight: bold; background-color: #0066FF;')
             elif result_command == "ERROR":
-                self.status_label.setText("¡ROJO! No hay más opciones")
-                self.status_label.setStyleSheet('font-size: 16px; color: red;')
+                self.status_label.setText("¡STOP! PROHIBIDO")
+                self.status_label.setStyleSheet('color: white; font-size: 16px; font-weight: bold; background-color: #CC0000;')
             else:
-                self.status_label.setText(f"Resultado: {result_command}")
+                self.status_label.setText(f"SEÑAL: {result_command}")
+                self.status_label.setStyleSheet('color: white; font-size: 16px; font-weight: bold; background-color: #666666;')
                 
         except Exception as e:
-            self.status_label.setText(f"Error: {str(e)}")
-            self.status_label.setStyleSheet('font-size: 16px; color: red;')
+            self.status_label.setText("ERROR DE IMAGEN")
+            self.status_label.setStyleSheet('color: white; font-size: 16px; font-weight: bold; background-color: #CC0000;')
             
     def closeEvent(self, event):
         """Maneja el evento de cierre de la aplicación"""
